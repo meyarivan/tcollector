@@ -83,6 +83,7 @@ final class jmx {
                          + "  --long                    Print a longer but more explicit output for each value.\n"
                          + "  --timestamp               Print a timestamp at the beginning of each line.\n"
                          + "  --watch N                 Reprint the output every N seconds.\n"
+                         + "  --jmx_url U               Use URL U to connect to JMX service.\n"
                          + "\n"
                          + "Return value:\n"
                          + "  0: Everything OK.\n"
@@ -109,6 +110,9 @@ final class jmx {
     int watch = 0;
     boolean long_output = false;
     boolean print_timestamps = false;
+    JMXServiceURL jvm_jmx_url = null; 
+    String jvm_name = null;
+
     while (current_arg < args.length) {
       if ("--watch".equals(args[current_arg])) {
         current_arg++;
@@ -128,6 +132,10 @@ final class jmx {
       } else if ("--timestamp".equals(args[current_arg])) {
         print_timestamps = true;
         current_arg++;
+      } else if ("--jmx_url".equals(args[current_arg])) {
+	current_arg++;
+	jvm_jmx_url = new JMXServiceURL(args[current_arg]);
+        current_arg++;
       } else {
         break;
       }
@@ -145,9 +153,16 @@ final class jmx {
       return;
     }
 
-    final JVM jvm = selectJVM(args[current_arg++], vms);
+    if (jvm_jmx_url == null) {
+      final JVM jvm = selectJVM(args[current_arg++], vms);
+      jvm_jmx_url = jvm.jmxUrl();
+      jvm_name = jvm.name();
+    } else {
+      jvm_name = jvm_jmx_url.toString();
+    }
+    
     vms = null;
-    final JMXConnector connection = JMXConnectorFactory.connect(jvm.jmxUrl());
+    final JMXConnector connection = JMXConnectorFactory.connect(jvm_jmx_url);
     try {
       final MBeanServerConnection mbsc = connection.getMBeanServerConnection();
       if (args.length == current_arg) {
@@ -157,9 +172,10 @@ final class jmx {
         return;
       }
 
+
       final TreeMap<ObjectName, Pattern> objects = selectMBeans(args, current_arg, mbsc);
       if (objects.isEmpty()) {
-        fatal(3, "No MBean matched your query in " + jvm.name());
+        fatal(3, "No MBean matched your query in " + jvm_name);
         return;
       }
       do {
@@ -177,7 +193,7 @@ final class jmx {
         }
         if (!found) {
           fatal(4, "No attribute of " + objects.keySet()
-                + " matched your query in " + jvm.name());
+                + " matched your query in " + jvm_name);
           return;
         }
         System.out.flush();

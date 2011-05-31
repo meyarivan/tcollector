@@ -27,7 +27,7 @@ USER = "hadoop"
 
 # We add those files to the classpath if they exist.
 CLASSPATH = [
-    "/usr/lib/jvm/java-6-sun/lib/tools.jar",
+"/usr/lib/jvm/java-6-sun/lib/tools.jar", os.getenv('CLASSPATH', '')
 ]
 
 # We shorten certain strings to avoid excessively long metric names.
@@ -38,14 +38,14 @@ JMX_SERVICE_RENAMING = {
 }
 
 def drop_privileges():
+    if os.getuid() != 0:
+        return
+
     try:
         ent = pwd.getpwnam(USER)
     except KeyError:
         print >>sys.stderr, "Not running, user '%s' doesn't exist" % USER
         sys.exit(13)
-
-    if os.getuid() != 0:
-        return
 
     os.setgid(ent.pw_gid)
     os.setuid(ent.pw_uid)
@@ -89,12 +89,18 @@ def main(argv):
             classpath.append(jar)
     classpath = ":".join(classpath)
 
+    jmx_url = os.getenv('TCOLLECTOR_JMX_URL')
+
+    if jmx_url:
+        arg_jmx_url = ["--jmx_url", jmx_url]
+    else:
+        arg_jmx_url = ['HRegionServer']
+
     jmx = subprocess.Popen(
         ["java", "-enableassertions", "-enablesystemassertions",  # safe++
          "-Xmx64m",  # Low RAM limit, to avoid stealing too much from prod.
          "-cp", classpath, "com.stumbleupon.monitoring.jmx",
-         "--watch", "10", "--long", "--timestamp",
-         "HRegionServer",  # Name of the process.
+         "--watch", "10", "--long", "--timestamp"] + arg_jmx_url + [
          # The remaining arguments are pairs (mbean_regexp, attr_regexp).
          # The first regexp is used to match one or more MBeans, the 2nd
          # to match one or more attributes of the MBeans matched.
